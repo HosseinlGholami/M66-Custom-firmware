@@ -1,8 +1,8 @@
 # M66 Firmware Documentation Index
 
 **Author**: Hossein Gholami  
-**Date**: 2025-11-01  
-**Version**: 2.0
+**Date**: 2025-11-03  
+**Version**: 3.0 - Command Interface & SDK Bugs Added
 
 ---
 
@@ -74,6 +74,30 @@ All documentation organized by purpose and complexity level.
    - **Time**: 30 minutes
    - **Complexity**: Medium
 
+### Command Interface
+
+7. **[COMMAND_INTERFACE_GUIDE.md](COMMAND_INTERFACE_GUIDE.md)** 📡 **REMOTE CONTROL REFERENCE**
+   - SMS-friendly text protocol
+   - Set/Get/Commit/List/Help commands
+   - UART and SMS integration examples
+   - Security considerations
+   - **CRITICAL**: Ql_vsnprintf SDK bug workaround documented
+   - Remote relay control examples
+   - **Time**: 25 minutes
+   - **Complexity**: Medium
+
+### SDK Issues & Workarounds
+
+8. **[SDK_BUGS.md](SDK_BUGS.md)** 🐛 **CRITICAL REFERENCE**
+   - Ql_vsnprintf completely broken (CRITICAL!)
+   - Workaround implementations
+   - Testing procedures
+   - Missing strtok fix
+   - Debug techniques
+   - **Time**: 15 minutes
+   - **Complexity**: Medium-Advanced
+   - **⚠️ MUST READ before using variadic functions!**
+
 ---
 
 ## 📊 Documentation by Purpose
@@ -97,6 +121,15 @@ All documentation organized by purpose and complexity level.
 
 #### **...Understand Why Not Use Polling**
 → Read [PERSISTENCE_STRATEGY.md](PERSISTENCE_STRATEGY.md) Section: "Why This Design? Performance & Flash Wear"
+
+#### **...Control the System Remotely via UART or SMS**
+→ Read [COMMAND_INTERFACE_GUIDE.md](COMMAND_INTERFACE_GUIDE.md) - Complete remote control guide
+
+#### **...Debug Ql_vsnprintf Issues or Garbled Output**
+→ Read [SDK_BUGS.md](SDK_BUGS.md) Section: "Critical: Ql_vsnprintf Completely Broken"
+
+#### **...Implement SMS Command Control**
+→ Check [COMMAND_INTERFACE_GUIDE.md](COMMAND_INTERFACE_GUIDE.md) Section: "Using Over SMS (Future)"
 
 #### **...Save Configuration to NVRAM**
 → Check [NVRAM_MODULE_GUIDE.md](NVRAM_MODULE_GUIDE.md) Section: "Saving and Loading Parameters"

@@ -2,8 +2,8 @@
 ## UART/SMS Parameter Control Protocol
 
 **Author**: Hossein Gholami  
-**Date**: 2025-11-01  
-**Version**: 1.0
+**Date**: 2025-11-02  
+**Version**: 1.1 - Production Ready ✅
 
 ---
 
@@ -424,6 +424,83 @@ G,4!    /* Verify */
 /* Redirect responses to SMS */
 com_init(sms_response_callback);
 ```
+
+---
+
+## ⚠️ Critical SDK Bug: Ql_vsnprintf Issue (RESOLVED)
+
+### The Problem
+
+During development, we discovered a **critical bug in the M66 SDK**: The `Ql_vsnprintf` function is completely broken when used with `va_list`. This caused all formatted responses to appear as garbled characters.
+
+**Symptoms:**
+```
+Output: +⸮\!⸮:⸮O<⸮
+Expected: === Command Help ===
+```
+
+**Root Cause:**
+- `Ql_vsnprintf` writes **0 bytes** to the buffer
+- ABI/implementation bug with `va_list` handling
+- Likely ARM EABI calling convention issue
+
+### The Solution
+
+**We replaced ALL `Ql_vsnprintf` calls with direct `Ql_sprintf` usage:**
+
+**❌ BROKEN CODE (Don't use):**
+```c
+static void send_response(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    Ql_vsnprintf(buffer, size, format, args);  // Writes 0 bytes!
+    va_end(args);
+}
+```
+
+**✅ WORKING CODE (Current implementation):**
+```c
+static void send_response(const char* str)
+{
+    // Takes pre-formatted string only
+    APP_DEBUG("%s", str);
+}
+
+// Callers format first, then send:
+Ql_sprintf(g_response_buffer, "OK: %s = %d\r\n", name, value);
+send_response(g_response_buffer);
+```
+
+### Key Takeaways
+
+1. **NEVER use `Ql_vsnprintf`** with `va_list` in M66 SDK
+2. **ALWAYS use `Ql_sprintf`** for formatted output (it works!)
+3. **No variadic wrappers** - format directly before sending
+4. This bug affects **ALL M66 firmware projects**
+
+### Testing the Fix
+
+The debug logs that identified the problem:
+```
+[COM] send_response: Format complete, buffer[0]='
+[COM] send_response: Buffer length = 0    ← SMOKING GUN!
+[COM] Buffer content:                     ← Empty!
+```
+
+After fix (working output):
+```
+?!
+
+=== Command Help ===
+S,<key>,<value>!  - Set parameter
+G,<key>!          - Get parameter
+...
+```
+
+### Impact
+
+This bug affected the **entire command interface**. Without this fix, the module would be completely unusable. The solution is now implemented and **production-ready** ✅
 
 ---
 
