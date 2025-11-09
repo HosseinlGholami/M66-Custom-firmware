@@ -2,5 +2,5 @@ CatcherTran::MtkCommIOInit()...
 [commModule][MtkCommIOLog]C:\Users\hosse\OneDrive\Desktop\M66_QuecOpen_GS3_SDK_V2.6\tools\QFlash_V4.0\\MtkCommIODLL.dll
 [commModule][MtkCommIOLog]Load MtkCommIO Library Failed...
 [CatcherTran][MtkCommIOLog]MtkCommIODll_Init Failed.
-[commModule][MtkCommIOLog]Rs232Module::Internal_Start().......m_port = 7, baud = 115200
-[commModule][MtkCommIOLog]Rs232Module::Internal_Start().......hCOM = 0x121C
+[commModule][MtkCommIOLog]Rs232Module::Internal_Start().......m_port = 8, baud = 115200
+[commModule][MtkCommIOLog]Rs232Module::Internal_Start().......hCOM = 0x1A40

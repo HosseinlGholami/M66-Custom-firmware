@@ -23,6 +23,8 @@
 #include "param/param.h"
 #include "gpio/gpio.h"
 #include "com/com.h"
+#include "oled/oled.h"
+// #include "i2c_scanner/i2c_scanner.h"
 
 /* Note: Test functions for Ql_vsnprintf removed - bug confirmed and fixed.
  * Solution: Use Ql_sprintf directly, avoid Ql_vsnprintf with va_list. */
@@ -112,11 +114,44 @@ void proc_main_task(s32 taskId)
     if (com_init(NULL) == 0) {
         APP_DEBUG("✅ Command interface initialized\r\n");
         APP_DEBUG("   Type ?! for help\r\n");
-        
+
         /* Register UART callback for command processing */
         uart_register_callback(uart_command_callback);
     } else {
         APP_DEBUG("❌ Failed to initialize command interface\r\n");
+    }
+    
+    // /* Scan I2C bus to find devices */
+    // APP_DEBUG("\r\n");
+    // APP_DEBUG("=== I2C Bus Scan ===\r\n");
+    // // pinSCL-green-cts , pinSDA-blue-rts 
+    // if (i2c_scanner_init(PINNAME_RI, PINNAME_DCD, 0) == 0) {
+    //     i2c_scanner_scan();
+    //     /* Note: scanner leaves I2C initialized for OLED */
+    // }
+    
+    /* Initialize OLED display (I2C on RI=SCL, DCD=SDA) */
+    APP_DEBUG("\r\n");
+    APP_DEBUG("=== OLED Display Initialization ===\r\n");
+    if (oled_init(PINNAME_RI, PINNAME_DCD) == OLED_OK) {
+        APP_DEBUG("✅ OLED display initialized\r\n");
+        APP_DEBUG("   128x64 SSD1306 @ 0x%02X\r\n", OLED_I2C_ADDR);
+        
+        /* Display Hello World demo */
+        oled_clear();
+        oled_draw_string(10, 0, "Hello World!");
+        oled_draw_string(0, 16, "M66 Firmware");
+        oled_draw_string(0, 32, "Build:");
+        oled_draw_string(42, 32, __DATE__);
+        oled_draw_rect(0, 0, 128, 64, FALSE);  /* Border */
+        oled_update();
+        
+        APP_DEBUG("✅ 'Hello World' displayed on OLED\r\n");
+    } else {
+        APP_DEBUG("❌ Failed to initialize OLED display\r\n");
+        APP_DEBUG("   Check I2C connections:\r\n");
+        APP_DEBUG("   - SCL -> RI pin\r\n");
+        APP_DEBUG("   - SDA -> DCD pin\r\n");
     }
     
     APP_DEBUG("\r\n");

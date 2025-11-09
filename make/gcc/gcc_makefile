@@ -32,7 +32,7 @@ TARGET   = $(strip $(PLATFORM))$(strip $(MEMORY))$(strip $(VERSION))
 #-------------------------------------------------------------------------------
 # Configure the include directories
 #-------------------------------------------------------------------------------
-INCS =  -I $(ENV_INC) 
+INCS =  -I $(ENV_INC)
 INCS += -I ./           \
         -I include      \
         -I ril/inc      \
@@ -43,6 +43,8 @@ INCS += -I ./           \
         -I custom/param \
         -I custom/gpio  \
         -I custom/com   \
+        -I custom/oled  \
+        -I custom/i2c_scanner \
 
 		
 
@@ -52,13 +54,15 @@ INCS += -I ./           \
 # Configure source code dirctories
 #-------------------------------------------------------------------------------
 SRC_DIRS=custom     \
-		 custom\config     \
+         custom\config     \
          custom\fota\src   \
-		 custom\uart       \
-		 custom\param      \
-		 custom\gpio       \
-		 custom\com        \
-		 ril\src    \
+         custom\uart       \
+         custom\param      \
+         custom\gpio       \
+         custom\com        \
+         custom\oled       \
+         custom\i2c_scanner \
+         ril\src    \
 
 
 
@@ -74,6 +78,8 @@ SRC_UART=$(wildcard custom/uart/*.c)
 SRC_PARAM=$(wildcard custom/param/*.c)
 SRC_GPIO=$(wildcard custom/gpio/*.c)
 SRC_COM=$(wildcard custom/com/*.c)
+SRC_OLED=$(wildcard custom/oled/*.c)
+SRC_I2C_SCANNER=$(wildcard custom/i2c_scanner/*.c)
 
 
 OBJS=\
@@ -84,7 +90,9 @@ OBJS=\
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_UART))       \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_PARAM))      \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_GPIO))       \
-	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_COM))      \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_COM))        \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_OLED))       \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_I2C_SCANNER)) \
 
 
 
