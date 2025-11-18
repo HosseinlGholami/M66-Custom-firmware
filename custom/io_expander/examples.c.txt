@@ -1,0 +1,456 @@
+/**
+ * @file    examples.c
+ * @brief   IO Expander Usage Examples
+ * @author  Hossein Gholami
+ * @date    2025-11-17
+ * 
+ * This file contains various examples showing how to use the IO expander module.
+ * These are standalone examples - copy the code you need into your application.
+ */
+
+#include "io_expander.h"
+#include "io_expander_config.h"
+#include "../uart/uart.h"
+#include "ql_system.h"
+
+/*============================================================================
+ * Example 1: Basic LED Control
+ *===========================================================================*/
+void example_basic_led_control(void)
+{
+    APP_DEBUG("\r\n=== Example 1: Basic LED Control ===\r\n");
+    
+    /* Configure Device 0, P0-P3 as outputs (LEDs) */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);  /* P4-P7 inputs, P0-P3 outputs */
+    
+    /* Turn on LED 1 (P0) */
+    APP_DEBUG("Turning on LED 1 (P0)\r\n");
+    io_expander_set_pins(IO_EXP_DEVICE_0, IO_EXPANDER_PIN0);
+    Ql_Sleep(1000);
+    
+    /* Turn on LED 2 (P1) */
+    APP_DEBUG("Turning on LED 2 (P1)\r\n");
+    io_expander_set_pins(IO_EXP_DEVICE_0, IO_EXPANDER_PIN1);
+    Ql_Sleep(1000);
+    
+    /* Turn off both LEDs */
+    APP_DEBUG("Turning off all LEDs\r\n");
+    io_expander_clear_pins(IO_EXP_DEVICE_0, IO_EXPANDER_PIN0 | IO_EXPANDER_PIN1);
+    Ql_Sleep(1000);
+    
+    APP_DEBUG("Example 1 complete\r\n");
+}
+
+/*============================================================================
+ * Example 2: LED Blinking Pattern
+ *===========================================================================*/
+void example_led_blink_pattern(void)
+{
+    int i;
+    
+    APP_DEBUG("\r\n=== Example 2: LED Blinking Pattern ===\r\n");
+    
+    /* Configure P0-P3 as outputs */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+    
+    /* Running light pattern */
+    APP_DEBUG("Running light pattern (P0 -> P3)\r\n");
+    for (i = 0; i < 4; i++) {
+        io_expander_write_port(IO_EXP_DEVICE_0, (1 << i) | 0xF0);
+        Ql_Sleep(200);
+    }
+    
+    /* Reverse running light */
+    APP_DEBUG("Reverse running light (P3 -> P0)\r\n");
+    for (i = 3; i >= 0; i--) {
+        io_expander_write_port(IO_EXP_DEVICE_0, (1 << i) | 0xF0);
+        Ql_Sleep(200);
+    }
+    
+    /* Binary counter pattern */
+    APP_DEBUG("Binary counter pattern (0-15)\r\n");
+    for (i = 0; i < 16; i++) {
+        io_expander_write_port(IO_EXP_DEVICE_0, i | 0xF0);
+        Ql_Sleep(300);
+    }
+    
+    /* All off */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+    
+    APP_DEBUG("Example 2 complete\r\n");
+}
+
+/*============================================================================
+ * Example 3: Button Input Reading
+ *===========================================================================*/
+void example_button_input(void)
+{
+    u8 button_states;
+    u8 button1, button2;
+    int i;
+    
+    APP_DEBUG("\r\n=== Example 3: Button Input Reading ===\r\n");
+    
+    /* Configure P4-P7 as inputs */
+    io_expander_set_as_input(IO_EXP_DEVICE_0, 0xF0);
+    
+    APP_DEBUG("Reading buttons on P4-P7 for 10 seconds...\r\n");
+    APP_DEBUG("(Press buttons to see changes)\r\n");
+    
+    for (i = 0; i < 20; i++) {  /* Read for 10 seconds (20 x 500ms) */
+        /* Read entire port */
+        io_expander_read_port(IO_EXP_DEVICE_0, &button_states);
+        
+        /* Read individual buttons */
+        io_expander_read_pin(IO_EXP_DEVICE_0, 4, &button1);
+        io_expander_read_pin(IO_EXP_DEVICE_0, 5, &button2);
+        
+        APP_DEBUG("Port: 0x%02X | Button1(P4): %d | Button2(P5): %d\r\n",
+                 button_states, button1, button2);
+        
+        Ql_Sleep(500);
+    }
+    
+    APP_DEBUG("Example 3 complete\r\n");
+}
+
+/*============================================================================
+ * Example 4: LED Mirror - Button Controls LED
+ *===========================================================================*/
+void example_led_mirror_button(void)
+{
+    u8 pin_states;
+    u8 button_state;
+    int i;
+    
+    APP_DEBUG("\r\n=== Example 4: LED Mirror Button ===\r\n");
+    
+    /* Configure P0-P3 as outputs (LEDs), P4-P7 as inputs (buttons) */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+    
+    APP_DEBUG("P0-P3 = LEDs, P4-P7 = Buttons\r\n");
+    APP_DEBUG("Button state mirrors to LED (P4->P0, P5->P1, etc.)\r\n");
+    APP_DEBUG("Running for 10 seconds...\r\n");
+    
+    for (i = 0; i < 20; i++) {  /* Run for 10 seconds */
+        /* Read entire port */
+        io_expander_read_port(IO_EXP_DEVICE_0, &pin_states);
+        
+        /* Mirror upper nibble (buttons) to lower nibble (LEDs) */
+        u8 new_state = ((pin_states >> 4) & 0x0F) | 0xF0;
+        io_expander_write_port(IO_EXP_DEVICE_0, new_state);
+        
+        Ql_Sleep(500);
+    }
+    
+    /* All off */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+    
+    APP_DEBUG("Example 4 complete\r\n");
+}
+
+/*============================================================================
+ * Example 5: Relay Control
+ *===========================================================================*/
+void example_relay_control(void)
+{
+    APP_DEBUG("\r\n=== Example 5: Relay Control ===\r\n");
+    
+    /* Configure P0-P3 as relay outputs */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+    
+    /* Relay 1 ON (P0) */
+    APP_DEBUG("Relay 1 (P0) ON\r\n");
+    io_expander_set_pins(IO_EXP_DEVICE_0, IO_EXPANDER_PIN0);
+    Ql_Sleep(2000);
+    
+    /* Relay 2 ON (P1) */
+    APP_DEBUG("Relay 2 (P1) ON\r\n");
+    io_expander_set_pins(IO_EXP_DEVICE_0, IO_EXPANDER_PIN1);
+    Ql_Sleep(2000);
+    
+    /* Both relays ON */
+    APP_DEBUG("Both relays ON\r\n");
+    io_expander_set_pins(IO_EXP_DEVICE_0, IO_EXPANDER_PIN0 | IO_EXPANDER_PIN1);
+    Ql_Sleep(2000);
+    
+    /* All relays OFF */
+    APP_DEBUG("All relays OFF\r\n");
+    io_expander_clear_pins(IO_EXP_DEVICE_0, 0x0F);
+    
+    APP_DEBUG("Example 5 complete\r\n");
+}
+
+/*============================================================================
+ * Example 6: Multiple Device Control (Cascade)
+ *===========================================================================*/
+void example_multiple_devices(void)
+{
+    int i;
+    
+    APP_DEBUG("\r\n=== Example 6: Multiple Device Control ===\r\n");
+    
+    u8 device_count = io_expander_get_device_count();
+    APP_DEBUG("Number of devices: %d\r\n", device_count);
+    
+    if (device_count < 2) {
+        APP_DEBUG("This example requires at least 2 devices\r\n");
+        return;
+    }
+    
+    /* Configure both devices: P0-P3 as outputs */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+    io_expander_write_port(IO_EXP_DEVICE_1, 0xF0);
+    
+    /* Alternate pattern between devices */
+    APP_DEBUG("Alternating pattern between devices\r\n");
+    for (i = 0; i < 5; i++) {
+        /* Device 0 ON, Device 1 OFF */
+        io_expander_write_port(IO_EXP_DEVICE_0, 0xFF);
+        io_expander_write_port(IO_EXP_DEVICE_1, 0xF0);
+        Ql_Sleep(500);
+        
+        /* Device 0 OFF, Device 1 ON */
+        io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+        io_expander_write_port(IO_EXP_DEVICE_1, 0xFF);
+        Ql_Sleep(500);
+    }
+    
+    /* Synchronized pattern */
+    APP_DEBUG("Synchronized pattern on both devices\r\n");
+    for (i = 0; i < 4; i++) {
+        u8 pattern = (1 << i) | 0xF0;
+        io_expander_write_port(IO_EXP_DEVICE_0, pattern);
+        io_expander_write_port(IO_EXP_DEVICE_1, pattern);
+        Ql_Sleep(300);
+    }
+    
+    /* All off */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+    io_expander_write_port(IO_EXP_DEVICE_1, 0xF0);
+    
+    APP_DEBUG("Example 6 complete\r\n");
+}
+
+/*============================================================================
+ * Example 7: Interrupt-Driven Input
+ *===========================================================================*/
+
+/* Global variables for interrupt example */
+static volatile u8 g_last_interrupt_device = 0xFF;
+static volatile u8 g_last_interrupt_state = 0x00;
+
+/* Interrupt callback */
+static void example_interrupt_callback(u8 device_id, u8 pin_states)
+{
+    g_last_interrupt_device = device_id;
+    g_last_interrupt_state = pin_states;
+    
+    APP_DEBUG("\r\n*** INTERRUPT: Device %d, State: 0x%02X ***\r\n",
+             device_id, pin_states);
+}
+
+void example_interrupt_driven_input(void)
+{
+    APP_DEBUG("\r\n=== Example 7: Interrupt-Driven Input ===\r\n");
+    
+    /* Register interrupt callback */
+    io_expander_register_int_callback(example_interrupt_callback);
+    
+    /* Configure P4-P7 as inputs with interrupt */
+    io_expander_set_as_input(IO_EXP_DEVICE_0, 0xF0);
+    
+    /* Clear interrupt by reading */
+    u8 dummy;
+    io_expander_read_port(IO_EXP_DEVICE_0, &dummy);
+    
+    APP_DEBUG("Waiting for input changes on P4-P7...\r\n");
+    APP_DEBUG("(Press buttons to trigger interrupts)\r\n");
+    APP_DEBUG("Will wait for 30 seconds\r\n");
+    
+    /* Reset interrupt tracking */
+    g_last_interrupt_device = 0xFF;
+    g_last_interrupt_state = 0x00;
+    
+    /* Wait for interrupts */
+    int i;
+    for (i = 0; i < 60; i++) {  /* 30 seconds */
+        if (g_last_interrupt_device != 0xFF) {
+            APP_DEBUG("Detected interrupt from device %d, state: 0x%02X\r\n",
+                     g_last_interrupt_device, g_last_interrupt_state);
+            
+            /* Process the interrupt */
+            u8 button4 = (g_last_interrupt_state >> 4) & 1;
+            u8 button5 = (g_last_interrupt_state >> 5) & 1;
+            u8 button6 = (g_last_interrupt_state >> 6) & 1;
+            u8 button7 = (g_last_interrupt_state >> 7) & 1;
+            
+            APP_DEBUG("  Buttons: P4=%d P5=%d P6=%d P7=%d\r\n",
+                     button4, button5, button6, button7);
+            
+            /* Clear interrupt flag */
+            g_last_interrupt_device = 0xFF;
+        }
+        
+        Ql_Sleep(500);
+    }
+    
+    APP_DEBUG("Example 7 complete\r\n");
+}
+
+/*============================================================================
+ * Example 8: 7-Segment Display Control (Common Cathode)
+ *===========================================================================*/
+
+/* 7-segment display patterns (common cathode, active HIGH) */
+/* Segments: DP G F E D C B A */
+static const u8 segment_digits[10] = {
+    0x3F,  /* 0: 0b00111111 */
+    0x06,  /* 1: 0b00000110 */
+    0x5B,  /* 2: 0b01011011 */
+    0x4F,  /* 3: 0b01001111 */
+    0x66,  /* 4: 0b01100110 */
+    0x6D,  /* 5: 0b01101101 */
+    0x7D,  /* 6: 0b01111101 */
+    0x07,  /* 7: 0b00000111 */
+    0x7F,  /* 8: 0b01111111 */
+    0x6F   /* 9: 0b01101111 */
+};
+
+void example_7segment_display(void)
+{
+    int i;
+    
+    APP_DEBUG("\r\n=== Example 8: 7-Segment Display ===\r\n");
+    
+    /* Configure all pins as outputs */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0x00);
+    
+    APP_DEBUG("Displaying digits 0-9 on 7-segment display\r\n");
+    
+    /* Count from 0 to 9 */
+    for (i = 0; i < 10; i++) {
+        APP_DEBUG("Displaying: %d\r\n", i);
+        io_expander_write_port(IO_EXP_DEVICE_0, segment_digits[i]);
+        Ql_Sleep(1000);
+    }
+    
+    /* All off */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0x00);
+    
+    APP_DEBUG("Example 8 complete\r\n");
+}
+
+/*============================================================================
+ * Example 9: Read-Modify-Write Pattern
+ *===========================================================================*/
+void example_read_modify_write(void)
+{
+    u8 current_state;
+    
+    APP_DEBUG("\r\n=== Example 9: Read-Modify-Write ===\r\n");
+    
+    /* Initialize port */
+    io_expander_write_port(IO_EXP_DEVICE_0, 0xF0);
+    
+    /* Read current state */
+    io_expander_read_port(IO_EXP_DEVICE_0, &current_state);
+    APP_DEBUG("Current state: 0x%02X\r\n", current_state);
+    
+    /* Modify: Set P0 without affecting other pins */
+    APP_DEBUG("Setting P0 HIGH (preserving other pins)\r\n");
+    current_state |= (1 << 0);
+    io_expander_write_port(IO_EXP_DEVICE_0, current_state);
+    Ql_Sleep(1000);
+    
+    /* Modify: Clear P0 without affecting other pins */
+    APP_DEBUG("Clearing P0 LOW (preserving other pins)\r\n");
+    current_state &= ~(1 << 0);
+    io_expander_write_port(IO_EXP_DEVICE_0, current_state);
+    Ql_Sleep(1000);
+    
+    /* Modify: Toggle P1 */
+    APP_DEBUG("Toggling P1\r\n");
+    current_state ^= (1 << 1);
+    io_expander_write_port(IO_EXP_DEVICE_0, current_state);
+    
+    APP_DEBUG("Final state: 0x%02X\r\n", current_state);
+    APP_DEBUG("Example 9 complete\r\n");
+}
+
+/*============================================================================
+ * Example 10: Status Monitor
+ *===========================================================================*/
+void example_status_monitor(void)
+{
+    APP_DEBUG("\r\n=== Example 10: Status Monitor ===\r\n");
+    
+    /* Print status of all devices */
+    io_expander_print_status();
+    
+    /* Test each device */
+    u8 device_count = io_expander_get_device_count();
+    u8 i;
+    
+    APP_DEBUG("\r\nTesting device communication:\r\n");
+    for (i = 0; i < device_count; i++) {
+        bool ok = io_expander_test_device(i);
+        const char* name = io_expander_get_device_name(i);
+        
+        APP_DEBUG("Device %d (%s): %s\r\n", 
+                 i, 
+                 name ? name : "Unknown",
+                 ok ? "OK" : "FAIL");
+    }
+    
+    APP_DEBUG("Example 10 complete\r\n");
+}
+
+/*============================================================================
+ * Run All Examples
+ *===========================================================================*/
+void io_expander_run_all_examples(void)
+{
+    APP_DEBUG("\r\n");
+    APP_DEBUG("==================================================\r\n");
+    APP_DEBUG("          IO EXPANDER EXAMPLES                    \r\n");
+    APP_DEBUG("==================================================\r\n");
+    APP_DEBUG("\r\n");
+    
+    /* Run each example with a delay between them */
+    example_basic_led_control();
+    Ql_Sleep(2000);
+    
+    example_led_blink_pattern();
+    Ql_Sleep(2000);
+    
+    example_button_input();
+    Ql_Sleep(2000);
+    
+    example_led_mirror_button();
+    Ql_Sleep(2000);
+    
+    example_relay_control();
+    Ql_Sleep(2000);
+    
+    example_multiple_devices();
+    Ql_Sleep(2000);
+    
+    example_interrupt_driven_input();
+    Ql_Sleep(2000);
+    
+    example_7segment_display();
+    Ql_Sleep(2000);
+    
+    example_read_modify_write();
+    Ql_Sleep(2000);
+    
+    example_status_monitor();
+    
+    APP_DEBUG("\r\n");
+    APP_DEBUG("==================================================\r\n");
+    APP_DEBUG("          ALL EXAMPLES COMPLETE                   \r\n");
+    APP_DEBUG("==================================================\r\n");
+    APP_DEBUG("\r\n");
+}
+

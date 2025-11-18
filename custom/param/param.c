@@ -76,6 +76,10 @@ static const ParamConfig_t param_config[PARAM_MAX_COUNT] = {
     {"task_counter", PARAM_TYPE_INT32,  FALSE},  /* PARAM_TASK_COUNTER */
     {"gps_lat",      PARAM_TYPE_INT32,  FALSE},  /* PARAM_GPS_LAT */
     {"gps_lon",      PARAM_TYPE_INT32,  FALSE},  /* PARAM_GPS_LON */
+    
+    /* IO Expander Control (RAM-only) */
+    {"io_exp0_in",   PARAM_TYPE_INT8,   FALSE},  /* PARAM_IO_EXP0_IN */
+    {"io_exp1_out",  PARAM_TYPE_INT8,   FALSE},  /* PARAM_IO_EXP1_OUT */
 };
 
 /*============================================================================
@@ -188,8 +192,16 @@ static void param_unlock(void)
  */
 static void invoke_callback(ParamKey_e key, const void* old_value, const void* new_value)
 {
+    APP_DEBUG("[PARAM_CALLBACK] invoke_callback() called for key=%d ('%s')\r\n", 
+             key, param_config[key].name);
+    APP_DEBUG("[PARAM_CALLBACK] Callback pointer: %p\r\n", param_callbacks[key]);
+    
     if (param_callbacks[key] != NULL) {
+        APP_DEBUG("[PARAM_CALLBACK] Calling registered callback...\r\n");
         param_callbacks[key](key, old_value, new_value, param_config[key].type);
+        APP_DEBUG("[PARAM_CALLBACK] Callback completed\r\n");
+    } else {
+        APP_DEBUG("[PARAM_CALLBACK] No callback registered for this parameter\r\n");
     }
 }
 
@@ -792,24 +804,30 @@ void param_get_ram_usage(u32* total_bytes, u32* int_params, u32* str_params)
 
 s32 param_set_callback(ParamKey_e key, ParamChangeCallback_t callback)
 {
+    APP_DEBUG("[PARAM] param_set_callback() called: key=%d, callback=%p\r\n", key, callback);
+    
     if (!param_initialized) {
-        APP_DEBUG("ERROR: param not initialized\r\n");
+        APP_DEBUG("[PARAM] ERROR: param not initialized\r\n");
         return -1;
     }
     
     if (!is_valid_key(key)) {
-        APP_DEBUG("ERROR: Invalid key: %d\r\n", key);
+        APP_DEBUG("[PARAM] ERROR: Invalid key: %d\r\n", key);
         return -2;
     }
+    
+    APP_DEBUG("[PARAM] Setting callback for key=%d ('%s')...\r\n", key, param_config[key].name);
     
     param_lock();
     param_callbacks[key] = callback;
     param_unlock();
     
+    APP_DEBUG("[PARAM] Callback stored at index %d, pointer: %p\r\n", key, param_callbacks[key]);
+    
     if (callback != NULL) {
-        APP_DEBUG("Registered callback for '%s'\r\n", param_config[key].name);
+        APP_DEBUG("[PARAM] ✅ Registered callback for '%s'\r\n", param_config[key].name);
     } else {
-        APP_DEBUG("Removed callback for '%s'\r\n", param_config[key].name);
+        APP_DEBUG("[PARAM] Removed callback for '%s'\r\n", param_config[key].name);
     }
     
     return 0;

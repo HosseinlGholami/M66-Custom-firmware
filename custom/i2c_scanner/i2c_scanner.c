@@ -156,7 +156,7 @@ u8 i2c_scanner_scan(void)
          * QL_RET_ERR_IIC_SLAVE_TOO_MANY (-310) error
          */
         if (configured_slaves >= 6) {
-            APP_DEBUG("  🔄 Reinitializing channel (slave limit reached)...\r\n");
+            // APP_DEBUG("  🔄 Reinitializing channel (slave limit reached)...\r\n");
             Ql_IIC_Uninit(g_i2c_channel);
             Ql_Sleep(50);
             ret = Ql_IIC_Init(g_i2c_channel, g_pinSCL, g_pinSDA, FALSE);
@@ -245,7 +245,7 @@ u8 i2c_scanner_scan(void)
                     
                 case QL_RET_ERR_IIC_SLAVE_TOO_MANY:  /* -310 */
                     /* Slave limit reached - reinit and retry this address */
-                    APP_DEBUG("⚠ 0x%02X: Slave limit reached (ret:%d), reinitializing...\r\n", addr, ret_config);
+                    // APP_DEBUG("⚠ 0x%02X: Slave limit reached (ret:%d), reinitializing...\r\n", addr, ret_config);
                     Ql_IIC_Uninit(g_i2c_channel);
                     Ql_Sleep(50);
                     ret = Ql_IIC_Init(g_i2c_channel, g_pinSCL, g_pinSDA, FALSE);

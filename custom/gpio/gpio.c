@@ -8,10 +8,15 @@
  * Output GPIOs can be automatically controlled via parameters using callbacks.
  */
 
+#include "config/module_config.h"  /* Must be first to define module flags */
 #include "gpio.h"
 #include "uart/uart.h"
 #include "ql_stdlib.h"
 #include "ql_eint.h"
+
+#ifdef MODULE_IO_EXPANDER_ENABLED
+#include "io_expander/io_expander.h"
+#endif
 
 /*============================================================================
  * GPIO Configuration Table
@@ -21,37 +26,47 @@
  * - For OUTPUT: Set linked_param (or PARAM_MAX_COUNT if no link) and init_level
  *===========================================================================*/
 
-/* Forward declaration for button callback (example, uncomment when needed) */
-/* static void button_eint_callback(Enum_PinName pin, Enum_PinLevel level, void* user_data); */
+/* Forward declaration for EINT callback */
+static void io_expander_eint_callback(Enum_PinName pin, Enum_PinLevel level, void* user_data);
 
+/* GPIO CONFIGURATION
+ * - LED output controlled by parameter
+ * - DTR input with EINT for IO expander interrupt handling
+ * 
+ * IO Expander INT Pin Connection:
+ * - PCF8574 INT pin → DTR (pin 1)
+ * - INT goes LOW when any PCF8574 pin changes state
+ * - EINT triggers, callback reads all IO expander states
+ */
 static const GpioConfig_t gpio_config[] = {
-    /* Example configuration - customize for your hardware! */
-    
-    /* LED outputs controlled by parameters */
+    /* LED output controlled by parameter */
     {
         .name = "LED1",
-        .pin = PINNAME_NETLIGHT,  /* Example: Use NET_LIGHT pin as LED */
+        .pin = PINNAME_NETLIGHT,
         .direction = GPIO_DIR_OUTPUT,
-        .eint_type = 0,  /* Not used for outputs */
+        .eint_type = 0,
         .eint_callback = NULL,
-        .linked_param = PARAM_IO_STATE,  /* Bit 0 of IO_STATE controls this LED */
+        .linked_param = PARAM_IO_STATE,
         .init_level = PINLEVEL_LOW
     },
     
-    /* Button input with EINT */
-    /* Uncomment and configure when you have actual button hardware:
+    /* DTR input with EINT for IO Expander interrupt
+     * Using LEVEL_TRIGGERED with mask/unmask pattern (per Quectel example):
+     * - PCF8574 INT goes LOW on change
+     * - EINT callback masks interrupt at start
+     * - Read device to clear PCF INT (goes HIGH)
+     * - Unmask interrupt at end
+     * - Ready for next change!
+     */
     {
-        .name = "BUTTON1",
-        .pin = PINNAME_RI,  // Example pin
+        .name = "DTR_IO_EXP_INT",
+        .pin = PINNAME_DTR,
         .direction = GPIO_DIR_INPUT,
         .eint_type = EINT_LEVEL_TRIGGERED,
-        .eint_callback = button_eint_callback,
-        .linked_param = PARAM_MAX_COUNT,  // Not linked
-        .init_level = PINLEVEL_LOW  // Not used for inputs
+        .eint_callback = io_expander_eint_callback,
+        .linked_param = PARAM_MAX_COUNT,
+        .init_level = PINLEVEL_LOW
     },
-    */
-    
-    /* Add more GPIO configurations here... */
 };
 
 #define GPIO_CONFIG_COUNT   (sizeof(gpio_config) / sizeof(gpio_config[0]))
@@ -131,30 +146,74 @@ static void gpio_param_callback(ParamKey_e key, const void* old_val, const void*
 }
 
 /**
- * @brief Example button EINT callback (commented out - uncomment when needed)
- * Called when button is pressed/released
+ * @brief IO Expander EINT callback
+ * Called when DTR pin (connected to PCF8574 INT) goes LOW
+ * 
+ * PCF8574 INT Behavior:
+ * - INT is normally HIGH (pulled up)
+ * - INT goes LOW when ANY pin on PCF8574 changes state
+ * - Reading from PCF8574 clears the interrupt
+ * - INT returns to HIGH after read
+ * 
+ * CRITICAL: Must follow Quectel's mask/unmask pattern for repeated interrupts!
+ * 1. Mask interrupt at start
+ * 2. Do work (read IO expander)
+ * 3. Unmask interrupt at end
  */
-/*
-static void button_eint_callback(Enum_PinName pin, Enum_PinLevel level, void* user_data)
+static void io_expander_eint_callback(Enum_PinName pin, Enum_PinLevel level, void* user_data)
 {
-    GpioData_t* gpio = find_gpio_by_pin(pin);
-    if (gpio == NULL) {
-        return;
-    }
+    /* STEP 1: Mask the interrupt immediately (per Quectel example) */
+    Ql_EINT_Mask(pin);
     
-    APP_DEBUG("GPIO: Button '%s' %s\r\n", 
-             gpio->config.name,
-             level == PINLEVEL_HIGH ? "PRESSED" : "RELEASED");
+    APP_DEBUG("\r\n");
+    APP_DEBUG("╔══════════════════════════════════════╗\r\n");
+    APP_DEBUG("║   IO EXPANDER INTERRUPT DETECTED    ║\r\n");
+    APP_DEBUG("╚══════════════════════════════════════╝\r\n");
+    APP_DEBUG("Pin: %d, Level: %s\r\n", pin, level == PINLEVEL_HIGH ? "HIGH" : "LOW");
     
-    // Example: Toggle LED on button press
-    if (level == PINLEVEL_HIGH) {
-        s8 io_state;
-        param_get_int8(PARAM_IO_STATE, &io_state);
-        io_state ^= 0x01;  // Toggle bit 0
-        param_set_int8(PARAM_IO_STATE, io_state);
+#ifdef MODULE_IO_EXPANDER_ENABLED
+    /* STEP 2: Read all IO expander devices to clear interrupt and get current states */
+    u8 device_id;
+    u8 num_devices = io_expander_get_device_count();
+    
+    APP_DEBUG("Reading %d IO expander device(s)...\r\n", num_devices);
+    
+    for (device_id = 0; device_id < num_devices; device_id++) {
+        u8 pin_states;
+        s32 ret = io_expander_read_port(device_id, &pin_states);
+        
+        if (ret == 0) {
+            const char* dev_name = io_expander_get_device_name(device_id);
+            APP_DEBUG("Device %d (%s): 0x%02X = ", device_id, 
+                     dev_name ? dev_name : "Unknown", pin_states);
+            
+            /* Print binary */
+            u8 i;
+            for (i = 0; i < 8; i++) {
+                APP_DEBUG("%d", (pin_states >> i) & 1);
+            }
+            APP_DEBUG("\r\n");
+            
+#ifdef MODULE_PARAM_ENABLED
+            /* Update parameter for Device 0 (inputs) */
+            if (device_id == 0) {  /* IO_EXP_DEVICE_0 (0x42) configured as inputs */
+                param_set_int8(PARAM_IO_EXP0_IN, (s8)pin_states);
+                APP_DEBUG("  → Updated PARAM_IO_EXP0_IN\r\n");
+            }
+#endif
+        } else {
+            APP_DEBUG("Device %d: Read failed (ret=%d)\r\n", device_id, ret);
+        }
     }
+#else
+    APP_DEBUG("IO Expander module not enabled!\r\n");
+#endif
+    
+    APP_DEBUG("════════════════════════════════════════\r\n");
+    
+    /* STEP 3: Unmask the interrupt to allow next trigger (per Quectel example) */
+    Ql_EINT_Unmask(pin);
 }
-*/
 
 /*============================================================================
  * Public API Implementation
@@ -215,28 +274,74 @@ s32 gpio_init(void)
             }
             
         } else { /* GPIO_DIR_INPUT */
-            /* Configure as input */
-            ret = Ql_GPIO_Init(cfg->pin, PINDIRECTION_IN, PINLEVEL_LOW, PINPULLSEL_PULLUP);
-            if (ret < 0) {
-                APP_DEBUG("  ERROR: Failed to init input GPIO, ret=%d\r\n", ret);
-                continue;
+            /* CRITICAL: For EINT pins, DO NOT call Ql_GPIO_Init!
+             * 
+             * Per Quectel's official example_eint.c:
+             * - Ql_GPIO_Init is NEVER called before EINT registration
+             * - Ql_EINT_Register must be the FIRST operation on the pin
+             * - Calling Ql_GPIO_Init makes the pin "owned" by GPIO, blocking EINT
+             * 
+             * EINT registration and init will configure the pin automatically.
+             */
+            if (cfg->eint_callback != NULL) {
+                APP_DEBUG("  Skipping Ql_GPIO_Init (EINT will configure pin directly)...\r\n");
+                /* Don't call Ql_GPIO_Init - proceed directly to EINT registration */
+            } else {
+                /* Regular input pin without EINT - configure as input with pull-up */
+                APP_DEBUG("  Configuring as INPUT with PULL-UP...\r\n");
+                ret = Ql_GPIO_Init(cfg->pin, PINDIRECTION_IN, PINLEVEL_LOW, PINPULLSEL_PULLUP);
+                if (ret < 0) {
+                    APP_DEBUG("  ❌ ERROR: Failed to init input GPIO, ret=%d\r\n", ret);
+                    APP_DEBUG("     (Pin may be in use by another peripheral)\r\n");
+                    continue;
+                }
+                APP_DEBUG("  ✅ GPIO init OK\r\n");
             }
             
             /* Register EINT if configured */
             if (cfg->eint_callback != NULL) {
+                APP_DEBUG("  [TEST] Attempting EINT registration...\r\n");
                 ret = Ql_EINT_Register(cfg->pin, cfg->eint_callback, NULL);
                 if (ret < 0) {
-                    APP_DEBUG("  ERROR: Failed to register EINT, ret=%d\r\n", ret);
-                    continue;
+                    APP_DEBUG("  ❌ EINT Register FAILED: ret=%d", ret);
+                    /* Decode common error codes */
+                    if (ret == -1) {
+                        APP_DEBUG(" (Generic error)");
+                    } else if (ret == -16) {
+                        APP_DEBUG(" (Pin in use / not available)");
+                    } else if (ret == -5) {
+                        APP_DEBUG(" (Invalid parameter)");
+                    }
+                    APP_DEBUG("\r\n");
+                    APP_DEBUG("     >>> %s does NOT support EINT <<<\r\n", cfg->name);
+                    continue;  /* Skip this pin, try next */
                 }
+                APP_DEBUG("  ✅ EINT Register OK\r\n");
                 
-                ret = Ql_EINT_Init(cfg->pin, cfg->eint_type, 50, 50, TRUE);  /* 50ms hw/sw debounce, auto unmask */
+                APP_DEBUG("  [TEST] Initializing EINT...\r\n");
+                ret = Ql_EINT_Init(cfg->pin, cfg->eint_type, 0, 5, 0);
                 if (ret < 0) {
-                    APP_DEBUG("  ERROR: Failed to init EINT, ret=%d\r\n", ret);
-                    continue;
+                    APP_DEBUG("  ❌ EINT Init FAILED: ret=%d\r\n", ret);
+                    APP_DEBUG("     >>> %s does NOT support EINT <<<\r\n", cfg->name);
+                    Ql_EINT_Uninit(cfg->pin);
+                    continue;  /* Skip this pin, try next */
                 }
                 
-                APP_DEBUG("  ✅ EINT registered (type %d)\r\n", cfg->eint_type);
+                APP_DEBUG("  ✅✅✅ SUCCESS! %s SUPPORTS EINT! ✅✅✅\r\n", cfg->name);
+                /* Display EINT type (M66 supports: EDGE_TRIGGERED=0, LEVEL_TRIGGERED=1) */
+                switch (cfg->eint_type) {
+                    case EINT_EDGE_TRIGGERED:
+                        APP_DEBUG("     Type: EDGE_TRIGGERED (HIGH→LOW edge)\r\n");
+                        break;
+                    case EINT_LEVEL_TRIGGERED:
+                        APP_DEBUG("     Type: LEVEL_TRIGGERED (when LOW)\r\n");
+                        break;
+                    default:
+                        APP_DEBUG("     Type: %d (unknown)\r\n", cfg->eint_type);
+                        break;
+                }
+                APP_DEBUG("     Pull-up: ENABLED\r\n");
+                APP_DEBUG("     >>> Connect %s to GND to trigger <<<\r\n", cfg->name);
             }
         }
         
@@ -246,8 +351,38 @@ s32 gpio_init(void)
     
     gpio_initialized = TRUE;
     
-    APP_DEBUG("GPIO module initialized: %d/%d GPIOs configured\r\n", gpio_count, GPIO_CONFIG_COUNT);
-    APP_DEBUG("==================================\r\n\r\n");
+    APP_DEBUG("\r\n");
+    APP_DEBUG("╔════════════════════════════════════════════════╗\r\n");
+    APP_DEBUG("║         EINT TEST SUMMARY                      ║\r\n");
+    APP_DEBUG("╚════════════════════════════════════════════════╝\r\n");
+    APP_DEBUG("Total GPIOs configured: %d/%d\r\n", gpio_count, GPIO_CONFIG_COUNT);
+    APP_DEBUG("\r\n");
+    APP_DEBUG("EINT-capable pins (successfully initialized):\r\n");
+    
+    /* Print summary of EINT-capable pins */
+    {
+        u32 i;
+        u32 eint_count = 0;
+        for (i = 0; i < gpio_count; i++) {
+            if (gpio_data[i].initialized && 
+                gpio_data[i].config.direction == GPIO_DIR_INPUT &&
+                gpio_data[i].config.eint_callback != NULL) {
+                APP_DEBUG("  ✅ %s (pin %d) - Connect to GND to test\r\n", 
+                         gpio_data[i].config.name,
+                         gpio_data[i].config.pin);
+                eint_count++;
+            }
+        }
+        
+        if (eint_count == 0) {
+            APP_DEBUG("  ❌ NO PINS SUPPORT EINT!\r\n");
+        } else {
+            APP_DEBUG("\r\n");
+            APP_DEBUG("SUCCESS! %d pin(s) support EINT\r\n", eint_count);
+        }
+    }
+    
+    APP_DEBUG("════════════════════════════════════════════════\r\n\r\n");
     
     return 0;
 }

@@ -45,6 +45,9 @@ INCS += -I ./           \
         -I custom/com   \
         -I custom/oled  \
         -I custom/i2c_scanner \
+        -I custom/i2c_bus \
+        -I custom/io_expander \
+        -I custom/debug \
 
 		
 
@@ -62,6 +65,9 @@ SRC_DIRS=custom     \
          custom\com        \
          custom\oled       \
          custom\i2c_scanner \
+         custom\i2c_bus    \
+         custom\io_expander \
+         custom\debug      \
          ril\src    \
 
 
@@ -80,6 +86,9 @@ SRC_GPIO=$(wildcard custom/gpio/*.c)
 SRC_COM=$(wildcard custom/com/*.c)
 SRC_OLED=$(wildcard custom/oled/*.c)
 SRC_I2C_SCANNER=$(wildcard custom/i2c_scanner/*.c)
+SRC_I2C_BUS=$(wildcard custom/i2c_bus/*.c)
+SRC_IO_EXPANDER=$(wildcard custom/io_expander/*.c)
+SRC_DEBUG=$(wildcard custom/debug/*.c)
 
 
 OBJS=\
@@ -93,6 +102,9 @@ OBJS=\
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_COM))        \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_OLED))       \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_I2C_SCANNER)) \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_I2C_BUS))    \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_IO_EXPANDER)) \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_DEBUG))      \
 
 
 

@@ -48,6 +48,10 @@ typedef enum {
     PARAM_GPS_LAT,
     PARAM_GPS_LON,
     
+    /* IO Expander Control (RAM-only) */
+    PARAM_IO_EXP0_IN,       /* IO Expander Device 0 (0x42) inputs (8-bit, read-only) */
+    PARAM_IO_EXP1_OUT,      /* IO Expander Device 1 (0x4A) outputs (8-bit) */
+    
     /* Add your parameters above this line */
     PARAM_MAX_COUNT         /* Must be last - auto count */
 } ParamKey_e;

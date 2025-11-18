@@ -3,6 +3,8 @@
  * @brief   SSD1306 OLED Display Driver Implementation
  * @author  Hossein Gholami
  * @date    2025-11-03
+ * 
+ * Modified to use shared I2C bus controller
  */
 
 #include "oled.h"
@@ -11,6 +13,7 @@
 #include "ql_error.h"
 #include "ql_system.h"   /* For Ql_Sleep */
 #include "../uart/uart.h"  /* For APP_DEBUG macro */
+#include "../i2c_bus/i2c_bus.h"  /* For shared I2C bus */
 
 /*============================================================================
  * SSD1306 Commands
@@ -178,23 +181,23 @@ static s32 oled_send_data(u8* data, u32 len)
  * Public API Implementation
  *===========================================================================*/
 
-s32 oled_init(Enum_PinName pinSCL, Enum_PinName pinSDA)
+s32 oled_init(void)
 {
     s32 ret;
+    u8 i2c_addr_7bit = OLED_I2C_ADDR >> 1;  /* Convert 8-bit to 7-bit address */
     
-    APP_DEBUG("[OLED] Init: SCL=%d, SDA=%d, Addr=0x%02X (8-bit)\r\n", pinSCL, pinSDA, OLED_I2C_ADDR);
+    APP_DEBUG("[OLED] Init: Addr=0x%02X (8-bit), 0x%02X (7-bit)\r\n", OLED_I2C_ADDR, i2c_addr_7bit);
     
-    /* Initialize I2C */
-    ret = Ql_IIC_Init(OLED_I2C_CHANNEL, pinSCL, pinSDA, 0);  /* 0 = Simulated I2C */
-    if (ret < 0) {
-        APP_DEBUG("[OLED] ❌ I2C Init failed: %d\r\n", ret);
+    /* Check if I2C bus is initialized */
+    if (!i2c_bus_is_initialized()) {
+        APP_DEBUG("[OLED] ❌ I2C bus not initialized! Call i2c_bus_init() first.\r\n");
         return OLED_ERR_I2C_INIT;
     }
     
-    /* Configure I2C for SSD1306 (using 8-bit address 0x78 = 7-bit 0x3C) */
-    ret = Ql_IIC_Config(OLED_I2C_CHANNEL, TRUE, OLED_I2C_ADDR, 0);  /* Speed ignored for simulated I2C */
+    /* Configure OLED device on I2C bus */
+    ret = i2c_bus_config_device(i2c_addr_7bit, "SSD1306 OLED");
     if (ret < 0) {
-        APP_DEBUG("[OLED] ❌ I2C Config failed: %d\r\n", ret);
+        APP_DEBUG("[OLED] ❌ Failed to configure device on bus: %d\r\n", ret);
         return OLED_ERR_I2C_CONFIG;
     }
     

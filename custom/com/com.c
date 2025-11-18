@@ -135,10 +135,12 @@ static ParamKey_e parse_param_key(const char* key_str)
 {
     s32 key_num;
     
-    /* Try to parse as number first */
-    key_num = Ql_atoi(key_str);
-    if (key_num >= 0 && key_num < PARAM_MAX_COUNT) {
-        return (ParamKey_e)key_num;
+    /* Check if string starts with a digit - only then parse as number */
+    if (key_str[0] >= '0' && key_str[0] <= '9') {
+        key_num = Ql_atoi(key_str);
+        if (key_num >= 0 && key_num < PARAM_MAX_COUNT) {
+            return (ParamKey_e)key_num;
+        }
     }
     
     /* Try to find by name */
@@ -156,6 +158,8 @@ static ComResult_e cmd_set_parameter(const char* key_str, const char* value_str)
     
     /* Parse key */
     key = parse_param_key(key_str);
+    APP_DEBUG("[COM_SET] Parsed key: %d ('%s')\r\n", key, key < PARAM_MAX_COUNT ? param_get_name(key) : "INVALID");
+    
     if (key >= PARAM_MAX_COUNT) {
         Ql_sprintf(g_response_buffer, "ERROR: Invalid parameter key: %s\r\n", key_str);
         send_response(g_response_buffer);
@@ -174,14 +178,24 @@ static ComResult_e cmd_set_parameter(const char* key_str, const char* value_str)
             /* For now, try int32 first, then int16, then int8 */
             s32 value = Ql_atoi(value_str);
             
+            APP_DEBUG("[COM_SET] Value: %d (0x%X)\r\n", value, value);
+            APP_DEBUG("[COM_SET] Attempting param_set_int8...\r\n");
+            
             /* Try int8 first (most common) */
             result = param_set_int8(key, (s8)value);
+            APP_DEBUG("[COM_SET] param_set_int8 returned: %d\r\n", result);
+            
             if (result == -3) { /* Type mismatch */
                 /* Try int16 */
+                APP_DEBUG("[COM_SET] Trying param_set_int16...\r\n");
                 result = param_set_int16(key, (s16)value);
+                APP_DEBUG("[COM_SET] param_set_int16 returned: %d\r\n", result);
+                
                 if (result == -3) {
                     /* Try int32 */
+                    APP_DEBUG("[COM_SET] Trying param_set_int32...\r\n");
                     result = param_set_int32(key, value);
+                    APP_DEBUG("[COM_SET] param_set_int32 returned: %d\r\n", result);
                 }
             }
             
@@ -222,6 +236,8 @@ static ComResult_e cmd_get_parameter(const char* key_str)
     
     /* Parse key */
     key = parse_param_key(key_str);
+    APP_DEBUG("[COM_GET] Parsed key: %d ('%s')\r\n", key, key < PARAM_MAX_COUNT ? param_get_name(key) : "INVALID");
+    
     if (key >= PARAM_MAX_COUNT) {
         Ql_sprintf(g_response_buffer, "ERROR: Invalid parameter key: %s\r\n", key_str);
         send_response(g_response_buffer);
@@ -229,7 +245,10 @@ static ComResult_e cmd_get_parameter(const char* key_str)
     }
     
     /* Try to get value by type */
+    APP_DEBUG("[COM_GET] Attempting param_get_int8...\r\n");
     result = param_get_int8(key, &i8_val);
+    APP_DEBUG("[COM_GET] param_get_int8 returned: %d, value: %d\r\n", result, i8_val);
+    
     if (result == 0) {
         Ql_sprintf(g_response_buffer, "%s = %d\r\n", param_get_name(key), i8_val);
         send_response(g_response_buffer);
@@ -333,6 +352,13 @@ static ComResult_e cmd_help(void)
     send_response("  S,mqtt_port,1883! - Set by name\r\n");
     send_response("  G,4!            - Get param 4\r\n");
     send_response("  C!              - Save to NVRAM\r\n");
+    send_response("\r\nIO Expander Control:\r\n");
+    send_response("  Device 0 (0x42): Inputs with interrupt\r\n");
+    send_response("  G,io_exp0_in!        - Read inputs\r\n");
+    send_response("  Device 1 (0x4A): Outputs\r\n");
+    send_response("  S,io_exp1_out,255!   - All outputs HIGH\r\n");
+    send_response("  S,io_exp1_out,0!     - All outputs LOW\r\n");
+    send_response("  S,io_exp1_out,15!    - P0-P3 HIGH (0x0F)\r\n");
     send_response("====================\r\n\r\n");
     
     return COM_OK;

@@ -54,11 +54,11 @@ typedef enum {
 /**
  * @brief Initialize OLED display
  * 
- * @param pinSCL SCL pin (e.g., PINNAME_DTR)
- * @param pinSDA SDA pin (e.g., PINNAME_DCD)
+ * I2C bus must be initialized with i2c_bus_init() before calling this function.
+ * 
  * @return OLED_OK on success, error code otherwise
  */
-s32 oled_init(Enum_PinName pinSCL, Enum_PinName pinSDA);
+s32 oled_init(void);
 
 /**
  * @brief Clear the entire display

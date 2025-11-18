@@ -53,19 +53,24 @@
 { Pin Name           |         Direction       |       Level         |   Pull Selection         }
  *---------------------------------------------------------------------------------------------*/
 
-#if 0 // If needed, config GPIOs here
-GPIO_ITEM(PINNAME_NETLIGHT,       PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_DTR,            PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_RI,             PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_DCD,            PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_CTS,            PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_RTS,            PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_RXD_AUX,        PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_TXD_AUX,        PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_PCM_CLK,        PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_PCM_SYNC,       PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_PCM_IN,         PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
-GPIO_ITEM(PINNAME_PCM_OUT,        PINDIRECTION_OUT,    PINLEVEL_LOW,  PINPULLSEL_PULLUP)
+/* EINT CONFIGURATION - DISABLED
+ * 
+ * Boot-time GPIO configuration creates conflicts with EINT!
+ * 
+ * The official Quectel example (example_eint.c) shows:
+ * 1. Open UART with FC_NONE
+ * 2. Directly call Ql_EINT_Register (NO Ql_GPIO_Init!)
+ * 3. Call Ql_EINT_Init
+ * 
+ * Configuring pins as GPIO (either at boot or in code) prevents EINT from claiming them.
+ * EINT registration must be the FIRST operation on these pins.
+ * 
+ * NOTE: RI and DCD are excluded (used for I2C SCL/SDA)
+ */
+#if 0  // MUST be 0 - GPIO config prevents EINT from working!
+GPIO_ITEM(PINNAME_DTR,            PINDIRECTION_IN,     PINLEVEL_LOW,  PINPULLSEL_PULLUP)
+GPIO_ITEM(PINNAME_CTS,            PINDIRECTION_IN,     PINLEVEL_LOW,  PINPULLSEL_PULLUP)
+GPIO_ITEM(PINNAME_RTS,            PINDIRECTION_IN,     PINLEVEL_LOW,  PINPULLSEL_PULLUP)
 #endif
 
 #endif //__CUSTOM_GPIO_CFG_H__

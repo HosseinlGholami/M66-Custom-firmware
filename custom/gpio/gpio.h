@@ -18,7 +18,7 @@
 #include "ql_type.h"
 #include "ql_gpio.h"
 #include "ql_eint.h"
-#include "custom_gpio_cfg.h"
+/* NOTE: custom_gpio_cfg.h is included by sys_config.c for boot-time initialization only */
 #include "param/param.h"
 
 /*============================================================================
