@@ -12,7 +12,6 @@
  * Commands:
  *   S,<key>,<value>!  - Set parameter (key = number or name)
  *   G,<key>!          - Get parameter
- *   C!                - Commit parameters to NVRAM
  *   L!                - List all parameters
  *   ?!                - Help (show command list)
  * 
@@ -20,7 +19,6 @@
  *   S,4,1!            - Set PARAM_IO_STATE (enum value 4) to 1
  *   S,mqtt_port,1883! - Set parameter by name to 1883
  *   G,4!              - Get PARAM_IO_STATE value
- *   C!                - Save all dirty parameters to NVRAM
  *   L!                - Print all parameters
  */
 
@@ -87,9 +85,9 @@ s32 com_init(ComResponseCallback_t response_callback);
  * @example
  *   com_process_command("S,4,1!", 6);        // Set PARAM_IO_STATE to 1
  *   com_process_command("G,mqtt_port!", 13); // Get MQTT port
- *   com_process_command("C!", 2);            // Commit to NVRAM
  */
 s32 com_process_command(const char* cmd, u32 len);
+s32 com_process_command_with_callback(const char* cmd, u32 len, ComResponseCallback_t callback);
 
 /* Note: com_send_response removed due to Ql_vsnprintf bug in SDK.
  * Use Ql_sprintf + callback or APP_DEBUG directly instead. */

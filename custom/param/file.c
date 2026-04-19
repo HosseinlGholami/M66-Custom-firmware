@@ -38,11 +38,11 @@ FileHandle_t file_open(const char* filename, FileMode_e mode)
         break;
         
     case FILE_MODE_WRITE:
-        ql_mode = QL_FS_CREATE_ALWAYS;
+        ql_mode = QL_FS_READ_WRITE | QL_FS_CREATE_ALWAYS;
         break;
         
     case FILE_MODE_APPEND:
-        ql_mode = QL_FS_CREATE;  /* Open or create */
+        ql_mode = QL_FS_READ_WRITE | QL_FS_CREATE;  /* Open or create */
         break;
         
     default:
@@ -150,20 +150,14 @@ s32 file_delete(const char* filename)
 
 bool file_exists(const char* filename)
 {
-    FileHandle_t handle;
+    s32 ret;
     
     if (filename == NULL) {
         return FALSE;
     }
     
-    /* Try to open for reading */
-    handle = file_open(filename, FILE_MODE_READ);
-    if (handle < 0) {
-        return FALSE;
-    }
-    
-    file_close(handle);
-    return TRUE;
+    ret = Ql_FS_Check((char*)filename);
+    return (ret == 0);
 }
 
 s32 file_get_size(const char* filename)
@@ -213,9 +207,6 @@ s32 file_save(const char* filename, const u8* data, u32 len)
         return -1;
     }
     
-    /* Delete old file first */
-    file_delete(filename);
-    
     /* Open for writing */
     fh = file_open(filename, FILE_MODE_WRITE);
     if (fh < 0) {
@@ -231,6 +222,8 @@ s32 file_save(const char* filename, const u8* data, u32 len)
         file_close(fh);
         return -3;
     }
+
+    Ql_FS_Flush(fh);
     
     /* Close file */
     file_close(fh);

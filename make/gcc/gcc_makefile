@@ -43,6 +43,7 @@ INCS += -I ./           \
         -I custom/param \
         -I custom/gpio  \
         -I custom/com   \
+        -I custom/sms   \
         -I custom/oled  \
         -I custom/i2c_scanner \
         -I custom/i2c_bus \
@@ -63,6 +64,9 @@ SRC_DIRS=custom     \
          custom\param      \
          custom\gpio       \
          custom\com        \
+         custom\sms        \
+         custom\board      \
+         custom\logic      \
          custom\oled       \
          custom\i2c_scanner \
          custom\i2c_bus    \
@@ -84,6 +88,9 @@ SRC_UART=$(wildcard custom/uart/*.c)
 SRC_PARAM=$(wildcard custom/param/*.c)
 SRC_GPIO=$(wildcard custom/gpio/*.c)
 SRC_COM=$(wildcard custom/com/*.c)
+SRC_SMS=$(wildcard custom/sms/*.c)
+SRC_BOARD=$(wildcard custom/board/*.c)
+SRC_LOGIC=$(wildcard custom/logic/*.c)
 SRC_OLED=$(wildcard custom/oled/*.c)
 SRC_I2C_SCANNER=$(wildcard custom/i2c_scanner/*.c)
 SRC_I2C_BUS=$(wildcard custom/i2c_bus/*.c)
@@ -100,6 +107,9 @@ OBJS=\
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_PARAM))      \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_GPIO))       \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_COM))        \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_SMS))        \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_BOARD))      \
+	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_LOGIC))      \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_OLED))       \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_I2C_SCANNER)) \
 	 $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC_I2C_BUS))    \

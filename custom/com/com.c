@@ -6,6 +6,8 @@
  */
 
 #include "com.h"
+#include "config/module_config.h"
+#include "i2c_bus/i2c_bus.h"
 #include "param/param.h"
 #include "uart/uart.h"
 #include "ql_stdlib.h"
@@ -16,6 +18,7 @@
  * Private Data
  *===========================================================================*/
 static ComResponseCallback_t response_callback = NULL;
+static ComResponseCallback_t active_response_callback = NULL;
 static bool com_initialized = FALSE;
 
 /* Global response buffer (in data segment, not stack) */
@@ -98,7 +101,9 @@ static void send_response(const char* str)
     len = Ql_strlen(str);
 
     /* Send response */
-    if (response_callback != NULL) {
+    if (active_response_callback != NULL) {
+        active_response_callback(str, len);
+    } else if (response_callback != NULL) {
         response_callback(str, len);
     } else {
         APP_DEBUG("%s", str);  /* Direct output, no formatting */
@@ -154,6 +159,7 @@ static ParamKey_e parse_param_key(const char* key_str)
 static ComResult_e cmd_set_parameter(const char* key_str, const char* value_str)
 {
     ParamKey_e key;
+    ParamType_e type;
     s32 result;
     
     /* Parse key */
@@ -166,39 +172,40 @@ static ComResult_e cmd_set_parameter(const char* key_str, const char* value_str)
         return COM_ERR_INVALID_KEY;
     }
     
-    /* Get parameter type and set value */
-    switch (param_get_name(key)[0]) { /* Hacky way to get type - improve later */
-        case 'i': /* int type parameters */
-        case 'n': /* net_rssi */
-        case 't': /* task_counter */
-        case 's': /* sensor_temp */
-        case 'g': /* gps_lat, gps_lon */
+    if (param_get_type(key, &type) != 0) {
+        send_response("ERROR: Failed to get parameter type\r\n");
+        return COM_ERR_PARAM_ERROR;
+    }
+
+    switch (type) {
+        case PARAM_TYPE_INT8:
         {
-            /* Determine type by trying param_config lookup */
-            /* For now, try int32 first, then int16, then int8 */
             s32 value = Ql_atoi(value_str);
-            
-            APP_DEBUG("[COM_SET] Value: %d (0x%X)\r\n", value, value);
-            APP_DEBUG("[COM_SET] Attempting param_set_int8...\r\n");
-            
-            /* Try int8 first (most common) */
             result = param_set_int8(key, (s8)value);
-            APP_DEBUG("[COM_SET] param_set_int8 returned: %d\r\n", result);
-            
-            if (result == -3) { /* Type mismatch */
-                /* Try int16 */
-                APP_DEBUG("[COM_SET] Trying param_set_int16...\r\n");
-                result = param_set_int16(key, (s16)value);
-                APP_DEBUG("[COM_SET] param_set_int16 returned: %d\r\n", result);
-                
-                if (result == -3) {
-                    /* Try int32 */
-                    APP_DEBUG("[COM_SET] Trying param_set_int32...\r\n");
-                    result = param_set_int32(key, value);
-                    APP_DEBUG("[COM_SET] param_set_int32 returned: %d\r\n", result);
-                }
+            if (result == 0) {
+                Ql_sprintf(g_response_buffer, "OK: %s = %d\r\n", param_get_name(key), (s8)value);
+                send_response(g_response_buffer);
+                return COM_OK;
             }
-            
+            break;
+        }
+
+        case PARAM_TYPE_INT16:
+        {
+            s32 value = Ql_atoi(value_str);
+            result = param_set_int16(key, (s16)value);
+            if (result == 0) {
+                Ql_sprintf(g_response_buffer, "OK: %s = %d\r\n", param_get_name(key), (s16)value);
+                send_response(g_response_buffer);
+                return COM_OK;
+            }
+            break;
+        }
+
+        case PARAM_TYPE_INT32:
+        {
+            s32 value = Ql_atoi(value_str);
+            result = param_set_int32(key, value);
             if (result == 0) {
                 Ql_sprintf(g_response_buffer, "OK: %s = %d\r\n", param_get_name(key), value);
                 send_response(g_response_buffer);
@@ -206,8 +213,8 @@ static ComResult_e cmd_set_parameter(const char* key_str, const char* value_str)
             }
             break;
         }
-        
-        default: /* Assume string type */
+
+        case PARAM_TYPE_STRING:
             result = param_set_string(key, value_str);
             if (result == 0) {
                 Ql_sprintf(g_response_buffer, "OK: %s = %s\r\n", param_get_name(key), value_str);
@@ -286,16 +293,8 @@ static ComResult_e cmd_get_parameter(const char* key_str)
  */
 static ComResult_e cmd_commit(void)
 {
-    s32 saved = param_commit();
-    
-    if (saved >= 0) {
-        Ql_sprintf(g_response_buffer, "OK: Saved %d parameters to NVRAM\r\n", saved);
-        send_response(g_response_buffer);
-        return COM_OK;
-    }
-    
-    send_response("ERROR: Failed to commit parameters\r\n");
-    return COM_ERR_PARAM_ERROR;
+    send_response("OK: Auto-save is enabled. No manual commit needed.\r\n");
+    return COM_OK;
 }
 
 /**
@@ -335,6 +334,27 @@ static ComResult_e cmd_list_parameters(void)
 }
 
 /**
+ * @brief Command: Run I2C bus scanner
+ * Format: I!
+ */
+static ComResult_e cmd_i2c_scan(void)
+{
+#ifdef MODULE_I2C_BUS_ENABLED
+    if (!i2c_bus_is_initialized()) {
+        send_response("ERROR: I2C bus is not initialized\r\n");
+        return COM_ERR_PARAM_ERROR;
+    }
+
+    send_response("OK: Running I2C scan\r\n");
+    i2c_bus_scan();
+    return COM_OK;
+#else
+    send_response("ERROR: I2C bus module is disabled\r\n");
+    return COM_ERR_PARAM_ERROR;
+#endif
+}
+
+/**
  * @brief Command: Show help
  * Format: ?!
  */
@@ -344,21 +364,24 @@ static ComResult_e cmd_help(void)
     send_response("\r\n=== Command Help ===\r\n");
     send_response("S,<key>,<value>!  - Set parameter\r\n");
     send_response("G,<key>!          - Get parameter\r\n");
-    send_response("C!                - Commit to NVRAM\r\n");
     send_response("L!                - List all parameters\r\n");
+    send_response("I!                - Run I2C scanner\r\n");
     send_response("?!                - Show this help\r\n");
     send_response("\r\nExamples:\r\n");
     send_response("  S,4,1!          - Set param 4 to 1\r\n");
     send_response("  S,mqtt_port,1883! - Set by name\r\n");
     send_response("  G,4!            - Get param 4\r\n");
-    send_response("  C!              - Save to NVRAM\r\n");
+    send_response("  G,battery_activation! - Read CTS input param\r\n");
+    send_response("  I!              - Scan I2C bus now\r\n");
+    send_response("  C!              - Compatibility alias (auto-save info)\r\n");
     send_response("\r\nIO Expander Control:\r\n");
-    send_response("  Device 0 (0x42): Inputs with interrupt\r\n");
-    send_response("  G,io_exp0_in!        - Read inputs\r\n");
-    send_response("  Device 1 (0x4A): Outputs\r\n");
-    send_response("  S,io_exp1_out,255!   - All outputs HIGH\r\n");
-    send_response("  S,io_exp1_out,0!     - All outputs LOW\r\n");
-    send_response("  S,io_exp1_out,15!    - P0-P3 HIGH (0x0F)\r\n");
+    send_response("  Device 0 (0x4A): P0-P3 outputs, P4-P7 inputs\r\n");
+    send_response("  S,io_exp_out0,1!     - Set P0 HIGH\r\n");
+    send_response("  S,io_exp_out1,0!     - Set P1 LOW\r\n");
+    send_response("  G,io_exp_in0!        - Read P4\r\n");
+    send_response("  G,io_exp_in3!        - Read P7\r\n");
+    send_response("\r\nSMS Control:\r\n");
+    send_response("  Send the same command text by SMS to control the device\r\n");
     send_response("====================\r\n\r\n");
     
     return COM_OK;
@@ -396,22 +419,28 @@ s32 com_init(ComResponseCallback_t callback)
     return 0;
 }
 
-s32 com_process_command(const char* cmd, u32 len)
+static s32 com_process_command_internal(const char* cmd,
+                                        u32 len,
+                                        ComResponseCallback_t callback)
 {
     char buffer[COM_CMD_MAX_LEN];
     char* cmd_type;
     char* key_str;
     char* value_str;
     ComResult_e result = COM_ERR_PARSE_ERROR;
+    ComResponseCallback_t previous_callback = active_response_callback;
 
     if (!com_initialized) {
         APP_DEBUG("ERROR: COM not initialized\r\n");
         return -1;
     }
+
+    active_response_callback = callback;
     
     if (len >= COM_CMD_MAX_LEN) {
         Ql_sprintf(g_response_buffer, "ERROR: Command too long (max %d chars)\r\n", COM_CMD_MAX_LEN);
         send_response(g_response_buffer);
+        active_response_callback = previous_callback;
         return COM_ERR_TOO_LONG;
     }
     
@@ -428,6 +457,7 @@ s32 com_process_command(const char* cmd, u32 len)
     cmd_type = simple_strtok(buffer, ',');
     if (cmd_type == NULL) {
         send_response("ERROR: Invalid command format\r\n");
+        active_response_callback = previous_callback;
         return COM_ERR_PARSE_ERROR;
     }
     
@@ -467,6 +497,11 @@ s32 com_process_command(const char* cmd, u32 len)
         case 'l':
             result = cmd_list_parameters();
             break;
+
+        case 'I': /* I2C scanner */
+        case 'i':
+            result = cmd_i2c_scan();
+            break;
             
         case '?': /* Help */
             result = cmd_help();
@@ -478,8 +513,19 @@ s32 com_process_command(const char* cmd, u32 len)
             result = COM_ERR_INVALID_CMD;
             break;
     }
-    
+
+    active_response_callback = previous_callback;
     return result;
+}
+
+s32 com_process_command(const char* cmd, u32 len)
+{
+    return com_process_command_internal(cmd, len, NULL);
+}
+
+s32 com_process_command_with_callback(const char* cmd, u32 len, ComResponseCallback_t callback)
+{
+    return com_process_command_internal(cmd, len, callback);
 }
 
 /* com_send_response removed - Ql_vsnprintf is broken in this SDK
@@ -498,4 +544,3 @@ const char* com_result_string(ComResult_e result)
         default:                    return "Unknown error";
     }
 }
-

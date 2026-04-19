@@ -27,15 +27,15 @@
  */
 #define MODULE_COM_ENABLED
 
+/**
+ * @brief Enable SMS command module
+ * Reuses the same command parser used by UART.
+ */
+#define MODULE_SMS_ENABLED
+
 /*============================================================================
  * Storage Modules
  *===========================================================================*/
-
-/**
- * @brief Enable Parameter Storage module
- * Provides persistent parameter storage in NVRAM
- */
-#define MODULE_PARAM_ENABLED
 
 /**
  * @brief Enable File System module
@@ -70,7 +70,7 @@
  * Depends on: MODULE_I2C_BUS_ENABLED
  */
 #ifdef MODULE_I2C_BUS_ENABLED
-    #define MODULE_I2C_SCANNER_ENABLED
+    /* #define MODULE_I2C_SCANNER_ENABLED */
 #endif
 
 /**
@@ -79,7 +79,7 @@
  * Depends on: MODULE_I2C_BUS_ENABLED
  */
 #ifdef MODULE_I2C_BUS_ENABLED
-    #define MODULE_OLED_ENABLED
+    /* #define MODULE_OLED_ENABLED */
 #endif
 
 /**

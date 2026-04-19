@@ -1,121 +1,61 @@
 /**
  * @file    gpio.h
- * @brief   GPIO management module with parameter integration
- * @author  Hossein Gholami
- * @date    2025-11-01
- * 
- * Features:
- * - Table-driven GPIO configuration
- * - Input GPIOs with EINT support and callbacks
- * - Output GPIOs linked to parameters (auto-update on param change)
- * - Thread-safe parameter integration
- * - Easy configuration - just modify gpio_config table
+ * @brief   GPIO abstraction for local pins and IO expanders
  */
 
 #ifndef GPIO_H
 #define GPIO_H
 
-#include "ql_type.h"
-#include "ql_gpio.h"
-#include "ql_eint.h"
-/* NOTE: custom_gpio_cfg.h is included by sys_config.c for boot-time initialization only */
 #include "param/param.h"
+#include "ql_eint.h"
+#include "ql_gpio.h"
+#include "ql_type.h"
 
-/*============================================================================
- * Constants
- *===========================================================================*/
-#define GPIO_MAX_PINS       16      /* Maximum number of GPIOs to manage */
+#define GPIO_MAX_PINS                16
+#define GPIO_EXPANDER_MAX_PIN_MAPS   32
 
-/*============================================================================
- * Types
- *===========================================================================*/
-
-/**
- * @brief GPIO direction
- */
 typedef enum {
-    GPIO_DIR_INPUT,         /* Input pin (with optional EINT) */
-    GPIO_DIR_OUTPUT         /* Output pin (can be linked to parameter) */
-} GpioDir_e;
+    GPIO_PIN_DIR_INPUT = 0,
+    GPIO_PIN_DIR_OUTPUT
+} GpioPinDir_e;
 
-/**
- * @brief GPIO configuration structure
- * Define one entry for each GPIO you want to manage
- */
 typedef struct {
-    const char*         name;           /* GPIO name (for debug) */
-    Enum_PinName        pin;            /* Physical pin number */
-    GpioDir_e           direction;      /* Input or output */
-    
-    /* === For INPUT GPIOs === */
-    Enum_EintType       eint_type;      /* EINT trigger type (or EINT_NONE if not used) */
-    Callback_EINT_Handle eint_callback; /* Callback for EINT events */
-    
-    /* === For OUTPUT GPIOs === */
-    ParamKey_e          linked_param;   /* Parameter to link (PARAM_MAX_COUNT if none) */
-    Enum_PinLevel       init_level;     /* Initial output level */
-} GpioConfig_t;
+    const char*   name;
+    Enum_PinName  pin;
+    ParamKey_e    linked_param;
+    Enum_PinLevel init_level;
+} GpioOutputConfig_t;
 
-/**
- * @brief GPIO runtime data (internal use)
- */
 typedef struct {
-    bool                initialized;    /* Is this GPIO configured? */
-    GpioConfig_t        config;         /* Copy of configuration */
-} GpioData_t;
+    const char*          name;
+    Enum_PinName         pin;
+    ParamKey_e           linked_param;
+    Enum_PinPullSel      pull_sel;
+    Enum_EintType        eint_type;
+    Callback_EINT_Handle eint_callback;
+} GpioInputConfig_t;
 
-/*============================================================================
- * API Functions
- *===========================================================================*/
+typedef struct {
+    const char* name;
+    u8          i2c_addr;
+    bool        enabled;
+} GpioExpanderNodeConfig_t;
 
-/**
- * @brief Initialize GPIO module
- * Configures all GPIOs based on gpio_config table
- * Registers parameter callbacks for linked output GPIOs
- * @return 0 on success, negative on error
- */
+typedef struct {
+    const char*    name;
+    u8             i2c_addr;
+    u8             pin;
+    GpioPinDir_e   direction;
+    ParamKey_e     linked_param;
+    Enum_PinLevel  init_level;
+} GpioExpanderPinConfig_t;
+
 s32 gpio_init(void);
-
-/**
- * @brief Set output GPIO level directly
- * @param pin Pin name
- * @param level High or low
- * @return 0 on success, negative on error
- */
 s32 gpio_set_level(Enum_PinName pin, Enum_PinLevel level);
-
-/**
- * @brief Get input GPIO level
- * @param pin Pin name
- * @param level Pointer to store level
- * @return 0 on success, negative on error
- */
 s32 gpio_get_level(Enum_PinName pin, Enum_PinLevel* level);
-
-/**
- * @brief Toggle output GPIO
- * @param pin Pin name
- * @return 0 on success, negative on error
- */
 s32 gpio_toggle(Enum_PinName pin);
-
-/**
- * @brief Print GPIO status (for debug)
- */
 void gpio_print_status(void);
-
-/**
- * @brief Get GPIO configuration table (for external configuration)
- * You can define your own gpio_config in your application
- * @return Pointer to GPIO configuration table
- */
-const GpioConfig_t* gpio_get_config(void);
-
-/**
- * @brief Get GPIO configuration count
- * @return Number of configured GPIOs
- */
 u32 gpio_get_count(void);
+void gpio_poll_inputs(void);
 
 #endif /* GPIO_H */
-
