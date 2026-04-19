@@ -37,25 +37,25 @@ static const GpioExpanderPinConfig_t g_gpio_expander_pin_config[] = {
         .init_level = PINLEVEL_HIGH
     },
     {
+        .name = "PCF4A_P3_OUT",
+        .i2c_addr = 0x4A,
+        .pin = 1,
+        .direction = GPIO_PIN_DIR_OUTPUT,
+        .linked_param = PARAM_IO_EXP_OUT1,
+        .init_level = PINLEVEL_HIGH
+    },
+    {
         .name = "PCF4A_P1_OUT",
         .i2c_addr = 0x4A,
         .pin = 2,
         .direction = GPIO_PIN_DIR_OUTPUT,
-        .linked_param = PARAM_IO_EXP_OUT1,
+        .linked_param = PARAM_IO_EXP_OUT2,
         .init_level = PINLEVEL_HIGH
     },
     {
         .name = "PCF4A_P2_OUT",
         .i2c_addr = 0x4A,
         .pin = 3,
-        .direction = GPIO_PIN_DIR_OUTPUT,
-        .linked_param = PARAM_IO_EXP_OUT2,
-        .init_level = PINLEVEL_HIGH
-    },
-    {
-        .name = "PCF4A_P3_OUT",
-        .i2c_addr = 0x4A,
-        .pin = 1,
         .direction = GPIO_PIN_DIR_OUTPUT,
         .linked_param = PARAM_IO_EXP_OUT3,
         .init_level = PINLEVEL_HIGH

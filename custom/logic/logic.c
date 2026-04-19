@@ -28,6 +28,34 @@ static u8 g_logic_last_mask = 0;
 static u64 g_logic_last_change_ms = 0;
 static bool g_logic_action_handled = FALSE;
 
+static void logic_send_alert_sms(ParamKey_e phone_key, u8 mask)
+{
+    char phone_number[PARAM_STRING_MAX_LEN];
+    char message[80];
+    s32 ret;
+
+    Ql_memset(phone_number, 0, sizeof(phone_number));
+    Ql_memset(message, 0, sizeof(message));
+
+    ret = param_get_string(phone_key, phone_number, sizeof(phone_number));
+    if (ret != 0 || phone_number[0] == '\0') {
+        APP_DEBUG("LOGIC: SMS target missing for param '%s' (ret=%d)\r\n",
+                  param_get_name(phone_key), ret);
+        return;
+    }
+
+    Ql_sprintf(message, "ALERT: input combo 0x%02X triggered", mask);
+    ret = sms_send_text(phone_number, message);
+    if (ret != 0) {
+        APP_DEBUG("LOGIC: failed to send combo SMS to %s (ret=%d)\r\n",
+                  phone_number, ret);
+        return;
+    }
+
+    APP_DEBUG("LOGIC: combo SMS sent to %s for mask 0x%02X\r\n",
+              phone_number, mask);
+}
+
 static void logic_toggle_output_param(ParamKey_e key)
 {
     s8 value = 0;
@@ -76,23 +104,20 @@ static void logic_handle_expander_combo(u8 mask)
 
     case 0x02:
         APP_DEBUG("LOGIC: io_exp_in1 press detected, toggling io_exp_out1\r\n");
-        logic_toggle_output_param(PARAM_IO_EXP_OUT1);
+        logic_toggle_output_param(PARAM_IO_EXP_OUT2);
         break;
 
     case 0x04:
         APP_DEBUG("LOGIC: io_exp_in2 press detected, toggling io_exp_out2\r\n");
-        logic_toggle_output_param(PARAM_IO_EXP_OUT2);
-        break;
-
-    // case 0x05:
-    //     APP_DEBUG("LOGIC: io_exp_in0 + io_exp_in2 press detected, toggling io_exp_out3\r\n");
-    //     logic_toggle_output_param(PARAM_IO_EXP_OUT3);
-    //     break;
-    case 0x06:
-        APP_DEBUG("LOGIC: io_exp_in0 + io_exp_in2 press detected, toggling io_exp_out3\r\n");
         logic_toggle_output_param(PARAM_IO_EXP_OUT3);
         break;
+    case 0x03:
+        APP_DEBUG("LOGIC: io_exp_in0 + io_exp_in2 press detected, toggling io_exp_out3\r\n");
+        logic_toggle_output_param(PARAM_IO_EXP_OUT1);
+        break;
+   
     default:
+        logic_send_alert_sms(PARAM_ALERT_PHONE_1, mask);
         APP_DEBUG("LOGIC: expander combo 0x%02X pressed for %d ms (log only)\r\n",
                   mask, LOGIC_PRESS_HOLD_MS);
         break;
@@ -104,6 +129,7 @@ static void logic_process_inputs(void)
     u8 current_mask;
     u64 now_ms;
 
+    sms_poll_inbox();
     gpio_poll_inputs();
 
     if (!g_logic_started) {
@@ -182,7 +208,7 @@ void logic_print_ready(void)
     APP_DEBUG("System ready. Type commands or waiting for events...\r\n");
     APP_DEBUG("Examples: S,4,1! or G,4! or L!\r\n");
     APP_DEBUG("IO Expander: S,io_exp_out0,1! or G,io_exp_in0! or I!\r\n");
-    APP_DEBUG("SMS control: send the same command text by SMS\r\n");
+    APP_DEBUG("SMS control: send same command text by SMS (e.g. G,10! or S,8,1!)\r\n");
     APP_DEBUG("\r\n");
 }
 
@@ -229,6 +255,10 @@ void logic_handle_message(const ST_MSG* msg)
         {
         case URC_SYS_INIT_STATE_IND:
             APP_DEBUG("<-- Sys Init Status: %d -->\r\n", msg->param2);
+            if (msg->param2 == SYS_STATE_SMSOK) {
+                s32 sms_ret = sms_init();
+                APP_DEBUG("LOGIC: SMS runtime init at SYS_STATE_SMSOK returned %d\r\n", sms_ret);
+            }
             break;
 
         case URC_SIM_CARD_STATE_IND:
