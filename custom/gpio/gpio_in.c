@@ -89,7 +89,7 @@ s32 gpio_input_init(void)
 
             ret = Ql_EINT_Init(g_gpio_inputs[i].config.pin,
                                g_gpio_inputs[i].config.eint_type,
-                               0,
+                               10,
                                5,
                                FALSE);
             if (ret < 0) {

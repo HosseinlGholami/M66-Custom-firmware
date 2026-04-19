@@ -1,13 +1,13 @@
 /**
  * @file    sms.c
- * @brief   SMS command bridge
+ * @brief   SMS command bridge orchestration
  */
 
 #include "sms.h"
 
 #include "com/com.h"
 #include "config/module_config.h"
-#include "param/param.h"
+#include "sms_internal.h"
 #include "ril.h"
 #include "ril_sms.h"
 #include "uart/uart.h"
@@ -18,9 +18,6 @@
 
 #define SMS_MAX_COMMAND_LEN  COM_CMD_MAX_LEN
 #define SMS_MAX_REPLY_LEN    160
-#define SMS_PHONE_MAX_LEN    32
-#define SMS_MAX_CANDIDATES   3
-#define SMS_DEFAULT_CC       "98"
 #define SMS_POLL_INTERVAL_MS 2000
 
 static bool g_sms_initialized = FALSE;
@@ -78,215 +75,6 @@ static s32 sms_configure_runtime(void)
     }
 
     return 0;
-}
-
-static bool sms_candidates_match(char lhs[][SMS_PHONE_MAX_LEN],
-                                 u32 lhs_count,
-                                 char rhs[][SMS_PHONE_MAX_LEN],
-                                 u32 rhs_count)
-{
-    u32 i;
-    u32 j;
-
-    for (i = 0; i < lhs_count; i++) {
-        for (j = 0; j < rhs_count; j++) {
-            if (Ql_strcmp(lhs[i], rhs[j]) == 0) {
-                return TRUE;
-            }
-        }
-    }
-
-    return FALSE;
-}
-
-static bool sms_is_digit(char ch)
-{
-    return (ch >= '0' && ch <= '9') ? TRUE : FALSE;
-}
-
-static void sms_sanitize_phone(const char* input, char* output, u32 output_len)
-{
-    u32 in_idx = 0;
-    u32 out_idx = 0;
-
-    if (output == NULL || output_len == 0) {
-        return;
-    }
-
-    output[0] = '\0';
-    if (input == NULL) {
-        return;
-    }
-
-    while (input[in_idx] != '\0' && out_idx < (output_len - 1)) {
-        char ch = input[in_idx++];
-
-        if (sms_is_digit(ch)) {
-            output[out_idx++] = ch;
-            continue;
-        }
-
-        if (ch == '+' && out_idx == 0) {
-            output[out_idx++] = ch;
-            continue;
-        }
-    }
-
-    output[out_idx] = '\0';
-}
-
-static bool sms_add_candidate(char candidates[][SMS_PHONE_MAX_LEN],
-                              u32* count,
-                              const char* number)
-{
-    u32 i;
-    u32 len;
-
-    if (candidates == NULL || count == NULL || number == NULL || number[0] == '\0') {
-        return FALSE;
-    }
-
-    len = Ql_strlen(number);
-    if (len == 0 || len >= SMS_PHONE_MAX_LEN) {
-        return FALSE;
-    }
-
-    for (i = 0; i < *count; i++) {
-        if (Ql_strcmp(candidates[i], number) == 0) {
-            return TRUE;
-        }
-    }
-
-    if (*count >= SMS_MAX_CANDIDATES) {
-        return FALSE;
-    }
-
-    Ql_strcpy(candidates[*count], number);
-    (*count)++;
-    return TRUE;
-}
-
-static void sms_build_candidates(const char* phone_number,
-                                 char candidates[][SMS_PHONE_MAX_LEN],
-                                 u32* count)
-{
-    char cleaned[SMS_PHONE_MAX_LEN];
-    char temp[SMS_PHONE_MAX_LEN];
-
-    if (count == NULL) {
-        return;
-    }
-
-    *count = 0;
-    Ql_memset(cleaned, 0, sizeof(cleaned));
-    Ql_memset(temp, 0, sizeof(temp));
-
-    sms_sanitize_phone(phone_number, cleaned, sizeof(cleaned));
-    if (cleaned[0] == '\0') {
-        return;
-    }
-
-    sms_add_candidate(candidates, count, cleaned);
-
-    if (cleaned[0] == '+') {
-        return;
-    }
-
-    if (cleaned[0] == '0' && cleaned[1] != '\0') {
-        Ql_sprintf(temp, "+%s%s", SMS_DEFAULT_CC, cleaned + 1);
-        sms_add_candidate(candidates, count, temp);
-    }
-
-    Ql_sprintf(temp, "+%s", cleaned);
-    sms_add_candidate(candidates, count, temp);
-}
-
-static s32 sms_send_with_candidates(const char* phone_number, const char* text, const char* tag)
-{
-    char candidates[SMS_MAX_CANDIDATES][SMS_PHONE_MAX_LEN];
-    u32 candidate_count = 0;
-    u32 i;
-    s32 last_ret = RIL_AT_INVALID_PARAM;
-    u32 msg_ref = 0;
-    u32 text_len;
-
-    if (phone_number == NULL || text == NULL) {
-        return RIL_AT_INVALID_PARAM;
-    }
-
-    text_len = Ql_strlen(text);
-    if (text_len == 0) {
-        return RIL_AT_INVALID_PARAM;
-    }
-
-    sms_build_candidates(phone_number, candidates, &candidate_count);
-    if (candidate_count == 0) {
-        APP_DEBUG("SMS: no valid phone candidate from '%s'\r\n", phone_number);
-        return RIL_AT_INVALID_PARAM;
-    }
-
-    for (i = 0; i < candidate_count; i++) {
-        s32 ret = RIL_SMS_SendSMS_Text(candidates[i],
-                                       (u8)Ql_strlen(candidates[i]),
-                                       LIB_SMS_CHARSET_GSM,
-                                       (u8*)text,
-                                       text_len,
-                                       &msg_ref);
-        if (ret == RIL_AT_SUCCESS) {
-            APP_DEBUG("SMS: %s sent to %s, ref=%d\r\n", tag, candidates[i], msg_ref);
-            return RIL_AT_SUCCESS;
-        }
-
-        APP_DEBUG("SMS: %s send failed to %s, ret=%d, at_err=%d\r\n",
-                  tag, candidates[i], ret, Ql_RIL_AT_GetErrCode());
-        last_ret = ret;
-    }
-
-    return last_ret;
-}
-
-static bool sms_is_authorized_sender(const char* sender)
-{
-    static const ParamKey_e authorized_keys[3] = {
-        PARAM_ALERT_PHONE_1,
-        PARAM_ALERT_PHONE_2,
-        PARAM_ALERT_PHONE_3
-    };
-    char sender_candidates[SMS_MAX_CANDIDATES][SMS_PHONE_MAX_LEN];
-    u32 sender_count = 0;
-    u32 i;
-
-    if (sender == NULL || sender[0] == '\0') {
-        return FALSE;
-    }
-
-    sms_build_candidates(sender, sender_candidates, &sender_count);
-    if (sender_count == 0) {
-        return FALSE;
-    }
-
-    for (i = 0; i < 3; i++) {
-        char allowed_raw[PARAM_STRING_MAX_LEN];
-        char allowed_candidates[SMS_MAX_CANDIDATES][SMS_PHONE_MAX_LEN];
-        u32 allowed_count = 0;
-
-        Ql_memset(allowed_raw, 0, sizeof(allowed_raw));
-        if (param_get_string(authorized_keys[i], allowed_raw, sizeof(allowed_raw)) != 0) {
-            continue;
-        }
-
-        sms_build_candidates(allowed_raw, allowed_candidates, &allowed_count);
-        if (allowed_count == 0) {
-            continue;
-        }
-
-        if (sms_candidates_match(sender_candidates, sender_count,
-                                 allowed_candidates, allowed_count)) {
-            return TRUE;
-        }
-    }
-
-    return FALSE;
 }
 
 static void sms_response_capture(const char* response, u32 len)
@@ -399,8 +187,10 @@ s32 sms_handle_new_sms(u32 sms_index)
 {
     ST_RIL_SMS_TextInfo text_info;
     char command_buffer[SMS_MAX_COMMAND_LEN];
+    char translated_command[SMS_MAX_COMMAND_LEN];
     const char* sender;
     s32 ret;
+    s32 tr_ret;
 
     APP_DEBUG("SMS: new SMS URC received, index=%d\r\n", sms_index);
 
@@ -459,11 +249,30 @@ s32 sms_handle_new_sms(u32 sms_index)
     Ql_memset(g_sms_reply_buffer, 0, sizeof(g_sms_reply_buffer));
     g_sms_reply_len = 0;
     g_sms_reply_truncated = FALSE;
+    Ql_memset(translated_command, 0, sizeof(translated_command));
 
-    ret = com_process_command_with_callback(command_buffer,
-                                            Ql_strlen(command_buffer),
-                                            sms_response_capture);
-    if (g_sms_reply_len == 0) {
+    tr_ret = sms_translate_param_command(command_buffer,
+                                         translated_command,
+                                         sizeof(translated_command));
+    if (tr_ret < 0) {
+        Ql_sprintf(g_sms_reply_buffer,
+                   "ERR: bad key. SMS keys:\r\n1-power\r\n2-Relay1\r\n3-Relay2\r\n4-Relay3\r\n5-Relay4\r\n6-phone1\r\n7-phone2\r\n8-phone3\r\n");
+        ret = COM_ERR_INVALID_KEY;
+    } else if (tr_ret > 0) {
+        APP_DEBUG("SMS: translated command -> %s\r\n", translated_command);
+        ret = com_process_command_with_callback(translated_command,
+                                                Ql_strlen(translated_command),
+                                                sms_response_capture);
+    } else if (sms_is_compact_list_command(command_buffer)) {
+        sms_build_compact_list_reply(g_sms_reply_buffer, sizeof(g_sms_reply_buffer));
+        ret = COM_OK;
+    } else {
+        ret = com_process_command_with_callback(command_buffer,
+                                                Ql_strlen(command_buffer),
+                                                sms_response_capture);
+    }
+
+    if (g_sms_reply_len == 0 && g_sms_reply_buffer[0] == '\0') {
         Ql_sprintf(g_sms_reply_buffer, "%s\r\n", com_result_string((ComResult_e)ret));
     } else if (g_sms_reply_truncated) {
         u32 len = Ql_strlen(g_sms_reply_buffer);

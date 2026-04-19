@@ -200,7 +200,7 @@ static void gpio_expander_output_callback(ParamKey_e key,
         return;
     }
 
-    pin_level = (*(const s8*)new_val) ? 1 : 0;
+    pin_level = (*(const s8*)new_val) ? 0 : 1;
 
     for (i = 0; i < GPIO_EXPANDER_PIN_COUNT; i++) {
         if (!g_gpio_expander_pins[i].initialized) {
